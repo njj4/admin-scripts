@@ -10,6 +10,8 @@ space.
 
 Usage: `backup <src-dir> <dest-basename>`
 
+`backup-exclude.txt` contains a list of filename patterns to be omitted.
+
 Example: `backup /local/fs2/photos photos` will clone `/local/fs2/photos`
 to `/backup/YYYYMMDD/photos`, hard-linking unchanged files to the most
 recent available previous copy.

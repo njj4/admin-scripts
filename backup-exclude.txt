@@ -1,0 +1,6 @@
+*~
+*.bak
+*,v
+Cache
+.svn
+.git
