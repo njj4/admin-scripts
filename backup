@@ -1,0 +1,94 @@
+#!/usr/bin/perl
+
+use File::Path qw(make_path remove_tree);
+
+$backup = "/backup";
+$exclude = "/local/etc/backup-exclude.txt";
+$keep = 6;
+
+($sdir,$ddir) = @ARGV;
+($now,$prev,$old) = findDirs($ddir);
+
+print "Source directory: $sdir\n";
+print "Backup directory: $now\n";
+print "Previous backup:  $prev\n";
+print "Old backups:      " . join(", ", @{$old}) . "\n";
+
+make_path($now);
+rsyncBackup($sdir,$ddir,$now,$prev);
+
+foreach $odir (@{$old})
+{
+  print "Deleting old backup $odir\n";
+  remove_tree($odir);
+  $odir =~ s/\/\s*$//;
+  my @components = split(/\//,$odir);
+  pop @components;
+  my $pdir = join("/",@components);
+  # print "rmdir($pdir)\n";
+  rmdir($pdir);
+}
+
+sub findDirs($)
+{
+  my ($name) = @_;
+  my @dirs = sort glob("$backup/20[0-9][0-9][01][0-9][0-3][0-9]/$name");
+  my @ttime = localtime(time);
+  my $tdir = sprintf("$backup/%04d%02d%02d/$name",
+    $ttime[5]+1900, $ttime[4]+1, $ttime[3]);
+  my $fmdir = sprintf("$backup/%04d%02d%02d/$name",
+    $ttime[5]+1900, $ttime[4]+1, 1);
+  my $fydir = sprintf("$backup/%04d%02d%02d/$name",
+    $ttime[5]+1900, 1, 1);
+  pop(@dirs) if ($dirs[-1] eq $tdir);
+  my $ydir = $dirs[-1];
+  return $ydir if (!wantarray);
+
+  my @deldirs = ( );
+  my @keepdirs = ( );
+  return ($tdir,$ydir,\@deldirs) if (@dirs < $keep);
+
+  my $count = 0;
+  my $ndirs = @dirs;
+  for (my $i = 0; $i < $ndirs; $i++)
+  {
+    if ($dirs[-1] eq $fmdir || $dirs[-1] eq $fydir || $count++ < $keep)
+    {
+      push(@keepdirs, pop(@dirs));
+    }
+    else
+    {
+      push(@deldirs, pop(@dirs));
+    }
+  }
+  return ($tdir,$ydir,\@deldirs);
+}
+
+sub rsyncBackup($$$$)
+{
+  my ($sdir,$ddir,$today,$yesterday) = @_;
+  my $linkdest = "/$yesterday/";
+  $linkdest =~ s/\/\//\//g;
+  my $tdir = "/$today";
+  $tdir =~ s/\/\//\//g;
+  my $fdir = "$sdir/";
+  $fdir = "/$fdir" if ($fdir !~ /:/);
+  $fdir =~ s/\/\//\//g;
+  my $cmd = "/usr/bin/rsync "
+    . "--verbose "
+    . "--archive "
+    . "--one-file-system "
+    . "--hard-links "
+    . "--human-readable "
+    . "--inplace "
+    . "--numeric-ids "
+    . "--delete "
+    . "--delete-excluded "
+    . "--exclude-from=$exclude "
+    . "--link-dest=$linkdest "
+    . "$fdir "
+    . "$tdir";
+  print "$cmd\n";
+  system($cmd);
+  print "\n\n";
+}
